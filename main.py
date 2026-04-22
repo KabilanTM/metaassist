@@ -73,13 +73,12 @@ if process_clicked:
                 doc_names  = []
 
                 for f in uploaded_files:
-                    # Write to a named temp file so PyPDFLoader can read it
-                    suffix = f".{f.name.split('.')[-1]}"
-                    with tempfile.NamedTemporaryFile(
-                        delete=False, suffix=suffix
-                    ) as tmp:
+                    # Save with the real filename so citations show correctly
+                    safe_name = f.name.replace(" ", "_")
+                    tmp_path = os.path.join(tempfile.gettempdir(), safe_name)
+                    with open(tmp_path, "wb") as tmp:
                         tmp.write(f.read())
-                        tmp_paths.append(tmp.name)
+                    tmp_paths.append(tmp_path)
                     doc_names.append(f.name)
 
                 # Build the RAG pipeline

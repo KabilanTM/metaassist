@@ -36,18 +36,26 @@ def apply_styles():
 
         /* Chat bubbles */
         .bubble-user {
-            background: #EEF2FF;
+            background: #EEF2FF !important;
             border-radius: 10px 10px 2px 10px;
             padding: 0.7rem 1rem;
             margin: 0.4rem 0;
             border-left: 3px solid #6366F1;
+            color: #1E1E2E !important;
+        }
+        .bubble-user * {
+            color: #1E1E2E !important;
         }
         .bubble-bot {
-            background: #F0FDF4;
+            background: #F0FDF4 !important;
             border-radius: 10px 10px 10px 2px;
             padding: 0.7rem 1rem;
             margin: 0.4rem 0;
             border-left: 3px solid #0D9488;
+            color: #1E1E2E !important;
+        }
+        .bubble-bot * {
+            color: #1E1E2E !important;
         }
         .bubble-label {
             font-size: 0.75rem;
@@ -59,12 +67,16 @@ def apply_styles():
 
         /* Source card */
         .source-card {
-            background: #F8FAFC;
+            background: #F8FAFC !important;
             border-left: 3px solid #0D9488;
             border-radius: 0 6px 6px 0;
             padding: 0.6rem 0.9rem;
             margin: 0.3rem 0;
             font-size: 0.83rem;
+            color: #1E1E2E !important;
+        }
+        .source-card * {
+            color: #1E1E2E !important;
         }
 
         /* Metric cards */
@@ -178,7 +190,7 @@ def render_chat(chat_history):
         st.markdown(
             f'<div class="bubble-user">'
             f'<div class="bubble-label" style="color:#6366F1">You</div>'
-            f'{turn["question"]}'
+            f'<span style="color:#1E1E2E">{turn["question"]}</span>'
             f'</div>',
             unsafe_allow_html=True
         )
@@ -187,7 +199,7 @@ def render_chat(chat_history):
         st.markdown(
             f'<div class="bubble-bot">'
             f'<div class="bubble-label" style="color:#0D9488">MetaAssist</div>'
-            f'{turn["answer"]}'
+            f'<span style="color:#1E1E2E">{turn["answer"]}</span>'
             f'</div>',
             unsafe_allow_html=True
         )
