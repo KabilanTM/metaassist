@@ -10,6 +10,7 @@ Internship  : Metaplore Solutions Pvt. Ltd.
 
 import os
 import time
+import json
 import tempfile
 
 import streamlit as st
@@ -21,9 +22,13 @@ from app.ui import (
     render_sidebar,
     render_chat,
     render_welcome,
+    render_load_previous,
 )
 
-# ── Page config (must be first Streamlit call) ─────────────────────────────
+INDEX_PATH = "faiss_index"
+META_PATH  = os.path.join(INDEX_PATH, "session_meta.json")
+
+# ── Page config ────────────────────────────────────────────────
 st.set_page_config(
     page_title = "MetaAssist | Document Intelligence",
     page_icon  = "🤖",
@@ -32,12 +37,12 @@ st.set_page_config(
 )
 
 
-# ── Session state initialisation ───────────────────────────────────────────
+# ── Session state initialisation ───────────────────────────────
 def init_state():
     defaults = {
         "rag"          : None,
-        "chat_history" : [],        # List of {question, answer, sources}
-        "conv_pairs"   : [],        # List of (user_msg, ai_msg) for memory
+        "chat_history" : [],
+        "conv_pairs"   : [],
         "docs_loaded"  : False,
         "doc_names"    : [],
         "total_chunks" : 0,
@@ -50,38 +55,74 @@ def init_state():
 init_state()
 
 
-# ── Apply styles & render header ───────────────────────────────────────────
+# ── Helper: save session metadata ─────────────────────────────
+def save_session_meta(doc_names, total_chunks):
+    """Save doc names alongside the FAISS index for session restore."""
+    os.makedirs(INDEX_PATH, exist_ok=True)
+    with open(META_PATH, "w") as f:
+        json.dump({"doc_names": doc_names, "total_chunks": total_chunks}, f)
+
+
+def load_session_meta():
+    """Load doc names from saved session metadata."""
+    if os.path.exists(META_PATH):
+        with open(META_PATH, "r") as f:
+            return json.load(f)
+    return {"doc_names": [], "total_chunks": 0}
+
+
+# ── Apply styles & header ──────────────────────────────────────
 apply_styles()
 render_header()
 
 
-# ── Sidebar ────────────────────────────────────────────────────────────────
+# ── Sidebar ────────────────────────────────────────────────────
 uploaded_files, process_clicked, chunk_size, top_k = render_sidebar(
     st.session_state.get("rag")
 )
 
+# ── Load previous session button ───────────────────────────────
+load_previous = render_load_previous(INDEX_PATH)
 
-# ── Document processing ────────────────────────────────────────────────────
+if load_previous and not st.session_state.docs_loaded:
+    with st.spinner("⚡ Loading previous session from disk..."):
+        try:
+            rag = RAGPipeline(chunk_size=chunk_size, top_k=top_k)
+            meta = rag.load_index(INDEX_PATH)
+            session = load_session_meta()
+
+            st.session_state.rag          = rag
+            st.session_state.docs_loaded  = True
+            st.session_state.doc_names    = session.get("doc_names", ["Previously indexed docs"])
+            st.session_state.total_chunks = session.get("total_chunks", meta.get("total_chunks", 0))
+            st.session_state.chat_history = []
+            st.session_state.conv_pairs   = []
+            st.session_state.query_count  = 0
+
+            st.success("✅ Previous session restored! Ready to answer questions.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ Could not load previous session: {e}")
+
+
+# ── Document processing ────────────────────────────────────────
 if process_clicked:
     if not uploaded_files:
         st.warning("⚠️ Please upload at least one PDF before processing.")
     else:
         with st.spinner("📖 Reading and indexing your documents..."):
             try:
-                # Save uploaded files to a temp directory
-                tmp_paths  = []
-                doc_names  = []
+                tmp_paths = []
+                doc_names = []
 
                 for f in uploaded_files:
-                    # Save with the real filename so citations show correctly
                     safe_name = f.name.replace(" ", "_")
-                    tmp_path = os.path.join(tempfile.gettempdir(), safe_name)
+                    tmp_path  = os.path.join(tempfile.gettempdir(), safe_name)
                     with open(tmp_path, "wb") as tmp:
                         tmp.write(f.read())
                     tmp_paths.append(tmp_path)
                     doc_names.append(f.name)
 
-                # Build the RAG pipeline
                 rag = RAGPipeline(
                     chunk_size    = chunk_size,
                     chunk_overlap = 64,
@@ -89,18 +130,22 @@ if process_clicked:
                 )
                 total_chunks = rag.load_documents(tmp_paths)
 
-                # Store in session
-                st.session_state.rag           = rag
-                st.session_state.docs_loaded   = True
-                st.session_state.doc_names     = doc_names
-                st.session_state.total_chunks  = total_chunks
-                st.session_state.chat_history  = []
-                st.session_state.conv_pairs    = []
-                st.session_state.query_count   = 0
+                # ── Auto-save index to disk ────────────────────
+                rag.save_index(INDEX_PATH)
+                save_session_meta(doc_names, total_chunks)
+
+                st.session_state.rag          = rag
+                st.session_state.docs_loaded  = True
+                st.session_state.doc_names    = doc_names
+                st.session_state.total_chunks = total_chunks
+                st.session_state.chat_history = []
+                st.session_state.conv_pairs   = []
+                st.session_state.query_count  = 0
 
                 st.success(
                     f"✅ {len(doc_names)} document(s) indexed — "
-                    f"{total_chunks} chunks ready!"
+                    f"{total_chunks} chunks ready! "
+                    f"💾 Index saved to disk."
                 )
                 st.rerun()
 
@@ -108,12 +153,11 @@ if process_clicked:
                 st.error(f"❌ Error during processing: {e}")
 
 
-# ── Main area ──────────────────────────────────────────────────────────────
+# ── Main chat area ─────────────────────────────────────────────
 if not st.session_state.docs_loaded:
     render_welcome()
 
 else:
-    # Render conversation history
     render_chat(st.session_state.chat_history)
 
     if not st.session_state.chat_history:
@@ -126,7 +170,6 @@ else:
 
     st.markdown("---")
 
-    # Query input row
     col_input, col_btn = st.columns([5, 1])
     with col_input:
         user_query = st.text_input(
@@ -138,7 +181,6 @@ else:
     with col_btn:
         ask = st.button("Ask →", use_container_width=True, type="primary")
 
-    # Process query
     if ask and user_query.strip():
         with st.spinner("🔍 Searching knowledge base..."):
             try:
@@ -149,30 +191,25 @@ else:
                 )
                 elapsed = round(time.time() - start, 2)
 
-                # Extract source info for display
                 sources = []
                 for doc in result["source_documents"]:
                     sources.append({
-                        "file"    : os.path.basename(
+                        "file"   : os.path.basename(
                             doc.metadata.get("source", "Unknown")
                         ),
-                        "page"    : doc.metadata.get("page", "N/A"),
-                        "snippet" : doc.page_content[:220].replace("\n", " ") + "..."
+                        "page"   : doc.metadata.get("page", "N/A"),
+                        "snippet": doc.page_content[:220].replace("\n", " ") + "..."
                     })
 
-                # Save to session state
                 st.session_state.chat_history.append({
-                    "question" : user_query,
-                    "answer"   : result["answer"],
-                    "sources"  : sources,
-                    "time"     : elapsed,
+                    "question": user_query,
+                    "answer"  : result["answer"],
+                    "sources" : sources,
+                    "time"    : elapsed,
                 })
-
-                # Save conversation pair for memory
                 st.session_state.conv_pairs.append(
                     (user_query, result["answer"])
                 )
-
                 st.session_state.query_count += 1
                 st.rerun()
 

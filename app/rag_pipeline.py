@@ -230,13 +230,30 @@ class RAGPipeline:
     # Utility : Save / Load FAISS index
     # ──────────────────────────────────────────
     def save_index(self, path: str = "faiss_index"):
-        """Persist the FAISS index to disk so it can be reloaded later."""
+        """
+        Persist the FAISS index + metadata to disk.
+        Saves both the vector index and a JSON file with doc names and chunk count.
+        """
         if self.vector_store:
+            import json
+            os.makedirs(path, exist_ok=True)
             self.vector_store.save_local(path)
+            meta = {
+                "total_chunks": self.total_chunks,
+                "chunk_size":   self.chunk_size,
+                "chunk_overlap": self.chunk_overlap,
+                "top_k":        self.top_k,
+            }
+            with open(os.path.join(path, "meta.json"), "w") as f:
+                json.dump(meta, f)
             print(f"[MetaAssist] Index saved → '{path}/'")
 
     def load_index(self, path: str = "faiss_index"):
-        """Load a previously saved FAISS index from disk."""
+        """
+        Load a previously saved FAISS index + metadata from disk.
+        Returns the metadata dict so the caller can restore session state.
+        """
+        import json
         self.vector_store = FAISS.load_local(
             path,
             self.embeddings,
@@ -246,4 +263,16 @@ class RAGPipeline:
             search_type   = "similarity",
             search_kwargs = {"k": self.top_k}
         )
+        meta_path = os.path.join(path, "meta.json")
+        meta = {}
+        if os.path.exists(meta_path):
+            with open(meta_path, "r") as f:
+                meta = json.load(f)
+            self.total_chunks = meta.get("total_chunks", 0)
         print(f"[MetaAssist] Index loaded ← '{path}/'")
+        return meta
+
+    @staticmethod
+    def index_exists(path: str = "faiss_index") -> bool:
+        """Check if a saved FAISS index exists on disk."""
+        return os.path.exists(os.path.join(path, "index.faiss"))

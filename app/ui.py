@@ -119,10 +119,10 @@ def render_sidebar(rag_instance):
         st.markdown("## ⚙️ Configuration")
 
         chunk_size = st.select_slider(
-            "Chunk size (tokens)",
+            "Chunk size (characters)",
             options=[256, 512, 768, 1024],
             value=512,
-            help="How many characters per text chunk. 512 is the optimal sweet spot."
+            help="How many characters per text chunk. Larger = more context per chunk but less precise retrieval. 512 is the optimal sweet spot."
         )
 
         top_k = st.slider(
@@ -156,7 +156,7 @@ def render_sidebar(rag_instance):
             with col1:
                 st.metric("Documents", len(st.session_state.doc_names))
             with col2:
-                st.metric("Chunks", st.session_state.total_chunks)
+                st.metric("Chunks indexed", st.session_state.total_chunks)
 
             st.metric("Queries answered", st.session_state.query_count)
 
@@ -196,9 +196,12 @@ def render_chat(chat_history):
         )
 
         # Bot bubble
+        time_str = f"&nbsp;·&nbsp;⏱ {turn['time']}s" if turn.get("time") else ""
         st.markdown(
             f'<div class="bubble-bot">'
-            f'<div class="bubble-label" style="color:#0D9488">MetaAssist</div>'
+            f'<div class="bubble-label" style="color:#0D9488">'
+            f'MetaAssist<span style="color:#94A3B8;font-weight:400;text-transform:none;letter-spacing:0">{time_str}</span>'
+            f'</div>'
             f'<span style="color:#1E1E2E">{turn["answer"]}</span>'
             f'</div>',
             unsafe_allow_html=True
@@ -241,3 +244,20 @@ def render_welcome():
             "**💬 Conversation Memory**\n\n"
             "Ask follow-up questions — MetaAssist remembers context."
         )
+
+def render_load_previous(index_path: str = "faiss_index") -> bool:
+    """
+    Show a 'Load Previous Session' button if a saved index exists.
+    Returns True if the user clicked the load button.
+    """
+    import os
+    if os.path.exists(os.path.join(index_path, "index.faiss")):
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 💾 Previous Session")
+        st.sidebar.info("A saved knowledge base was found from your last session.")
+        return st.sidebar.button(
+            "⚡ Load Previous Session",
+            use_container_width=True,
+            help="Reload the last indexed documents without re-uploading"
+        )
+    return False
