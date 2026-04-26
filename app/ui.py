@@ -195,17 +195,32 @@ def render_chat(chat_history):
             unsafe_allow_html=True
         )
 
-        # Bot bubble
+        # Bot bubble — check if it's a guardrail response
         time_str = f"&nbsp;·&nbsp;⏱ {turn['time']}s" if turn.get("time") else ""
-        st.markdown(
-            f'<div class="bubble-bot">'
-            f'<div class="bubble-label" style="color:#0D9488">'
-            f'MetaAssist<span style="color:#94A3B8;font-weight:400;text-transform:none;letter-spacing:0">{time_str}</span>'
-            f'</div>'
-            f'<span style="color:#1E1E2E">{turn["answer"]}</span>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
+        is_guardrail = "not available in the uploaded documents" in turn["answer"].lower()
+
+        if is_guardrail:
+            st.markdown(
+                f'<div style="background:#FFF8E1;border-left:3px solid #F59E0B;'
+                f'border-radius:10px 10px 10px 2px;padding:0.7rem 1rem;margin:0.4rem 0;">'
+                f'<div style="font-size:0.75rem;font-weight:600;color:#B45309;'
+                f'text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.3rem;">'
+                f'⚠️ MetaAssist{time_str}</div>'
+                f'<span style="color:#78350F">{turn["answer"]}</span>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f'<div class="bubble-bot">'
+                f'<div class="bubble-label" style="color:#0D9488">'
+                f'MetaAssist<span style="color:#94A3B8;font-weight:400;'
+                f'text-transform:none;letter-spacing:0">{time_str}</span>'
+                f'</div>'
+                f'<span style="color:#1E1E2E">{turn["answer"]}</span>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
 
         # Source citations (collapsible)
         if turn.get("sources"):
@@ -215,9 +230,18 @@ def render_chat(chat_history):
                 for i, src in enumerate(turn["sources"], 1):
                     st.markdown(
                         f'<div class="source-card">'
-                        f'<b>#{i} &nbsp; 📄 {src["file"]} &nbsp;|&nbsp; '
-                        f'Page {src["page"]}</b><br>'
-                        f'<i>"{src["snippet"]}"</i>'
+                        f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+                        f'<span style="background:#0D9488;color:white;font-size:10px;'
+                        f'font-weight:700;padding:2px 7px;border-radius:10px;">#{i}</span>'
+                        f'<span style="font-weight:600;color:#1E293B;font-size:0.85rem;">'
+                        f'📄 {src["file"]}</span>'
+                        f'<span style="color:#94A3B8;font-size:0.8rem;">Page {src["page"]}</span>'
+                        f'</div>'
+                        f'<div style="background:#F1F5F9;border-radius:6px;padding:6px 10px;'
+                        f'font-size:0.82rem;color:#334155;line-height:1.5;">'
+                        f'<span style="color:#0D9488;font-weight:600;">Retrieved passage:</span> '
+                        f'{src["snippet"]}'
+                        f'</div>'
                         f'</div>',
                         unsafe_allow_html=True
                     )
@@ -261,3 +285,54 @@ def render_load_previous(index_path: str = "faiss_index") -> bool:
             help="Reload the last indexed documents without re-uploading"
         )
     return False
+
+def render_export_button(chat_history: list):
+    """
+    Render a Download Chat button if there is conversation history.
+    Exports the full conversation as a formatted .txt file.
+    """
+    if not chat_history:
+        return
+
+    lines = []
+    lines.append("=" * 60)
+    lines.append("MetaAssist — Conversation Export")
+    lines.append("Metaplore Solutions Pvt. Ltd.")
+    lines.append("=" * 60)
+    lines.append("")
+
+    for i, turn in enumerate(chat_history, 1):
+        lines.append(f"[{i}] YOU:")
+        lines.append(f"    {turn['question']}")
+        lines.append("")
+        lines.append(f"    METAASSIST ({turn.get('time', '?')}s):")
+        # Word-wrap the answer at 70 chars
+        answer = turn["answer"]
+        words, line_buf = answer.split(), []
+        char_count = 0
+        for word in words:
+            if char_count + len(word) + 1 > 70:
+                lines.append(f"    {'  '.join(line_buf)}")
+                line_buf, char_count = [word], len(word)
+            else:
+                line_buf.append(word)
+                char_count += len(word) + 1
+        if line_buf:
+            lines.append(f"    {' '.join(line_buf)}")
+        lines.append("")
+        if turn.get("sources"):
+            lines.append("    Sources:")
+            for src in turn["sources"]:
+                lines.append(f"      • {src['file']} | Page {src['page']}")
+        lines.append("-" * 60)
+        lines.append("")
+
+    export_text = "\n".join(lines)
+
+    st.download_button(
+        label      = "💾 Export Chat (.txt)",
+        data       = export_text,
+        file_name  = "metaassist_conversation.txt",
+        mime       = "text/plain",
+        use_container_width = True,
+    )

@@ -23,6 +23,7 @@ from app.ui import (
     render_chat,
     render_welcome,
     render_load_previous,
+    render_export_button,
 )
 
 INDEX_PATH = "faiss_index"
@@ -47,6 +48,7 @@ def init_state():
         "doc_names"    : [],
         "total_chunks" : 0,
         "query_count"  : 0,
+        "summary"      : None,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -164,9 +166,35 @@ else:
         st.markdown("### 👋 Ready! Ask anything about your documents.")
         st.markdown(
             "**Try:** *What is this document about?* &nbsp;|&nbsp; "
-            "*Summarize the key points* &nbsp;|&nbsp; "
             "*What does it say about [topic]?*"
         )
+
+    # ── Summarize button ──────────────────────────────────────
+    col_sum, col_exp = st.columns([1, 1])
+    with col_sum:
+        if st.button("📋 Summarize Documents", use_container_width=True):
+            with st.spinner("📖 Generating summary..."):
+                try:
+                    doc_name = (
+                        st.session_state.doc_names[0]
+                        if len(st.session_state.doc_names) == 1
+                        else None
+                    )
+                    summary = st.session_state.rag.summarize(doc_name)
+                    st.session_state.summary = summary
+                except Exception as e:
+                    st.error(f"❌ Summary failed: {e}")
+
+    with col_exp:
+        render_export_button(st.session_state.chat_history)
+
+    # Show summary if generated
+    if st.session_state.summary:
+        with st.expander("📋 Document Summary", expanded=True):
+            st.markdown(st.session_state.summary)
+            if st.button("✕ Clear Summary", key="clear_sum"):
+                st.session_state.summary = None
+                st.rerun()
 
     st.markdown("---")
 

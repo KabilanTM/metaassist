@@ -226,6 +226,64 @@ class RAGPipeline:
             "source_documents" : source_docs,
         }
 
+    def summarize(self, doc_name: str = None) -> str:
+        """
+        Generate a concise summary of the indexed documents.
+
+        Uses broad retrieval (higher top_k) with a summarization-specific
+        prompt to extract key points from the document corpus.
+
+        Args:
+            doc_name: Optional specific document name to mention in the prompt.
+
+        Returns:
+            str — a structured summary from the LLM.
+        """
+        if not self.retriever:
+            raise RuntimeError(
+                "No documents loaded. Call load_documents() first."
+            )
+
+        # Use a higher top_k for summarization to get broader coverage
+        summary_retriever = self.vector_store.as_retriever(
+            search_type   = "similarity",
+            search_kwargs = {"k": min(8, self.total_chunks)}
+        )
+
+        # Broad query to retrieve representative chunks
+        broad_chunks = summary_retriever.invoke(
+            "main topics key points summary overview"
+        )
+
+        context = "\n\n---\n\n".join([
+            f"[Page {doc.metadata.get('page', 'N/A')}]\n{doc.page_content}"
+            for doc in broad_chunks
+        ])
+
+        doc_ref = f'"{doc_name}"' if doc_name else "the uploaded document(s)"
+
+        summary_prompt = f"""You are MetaAssist, an enterprise document assistant.
+Based ONLY on the following content from {doc_ref}, provide a structured summary.
+
+Format your response exactly like this:
+**Overview:** (1-2 sentences describing what the document is about)
+
+**Key Points:**
+- (point 1)
+- (point 2)
+- (point 3)
+- (add more as needed)
+
+**Important Details:** (any specific facts, names, dates, or numbers worth noting)
+
+Document content:
+{context}
+
+Summary:"""
+
+        response = self.llm.invoke(summary_prompt)
+        return response.content
+    
     # ──────────────────────────────────────────
     # Utility : Save / Load FAISS index
     # ──────────────────────────────────────────
