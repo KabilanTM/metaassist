@@ -166,3 +166,134 @@ google-generativeai 0.8.6, python-dotenv 1.2.2
 - [ ] Test with multiple PDFs simultaneously
 - [ ] Improve UI — add typing indicator while generating
 - [ ] Push all working code to GitHub
+
+---
+
+## Session 4 — Priority 1 Improvements (Apr 23, 2026)
+
+### What was done
+
+**Fix 1 — Characters vs Tokens terminology correction**
+- The sidebar label said "Chunk size (tokens)" which was technically wrong.
+  `RecursiveCharacterTextSplitter` uses character count, not token count.
+- Fixed label to "Chunk size (characters)" in `app/ui.py`
+- Updated help text to explain the trade-off clearly
+- Lesson: code and documentation must match exactly — an interviewer or
+  professor will catch this kind of inconsistency
+
+**Fix 2 — Response time display in chat bubbles**
+- Added elapsed time (e.g. "⏱ 2.94s") next to the MetaAssist label
+  in every bot response bubble
+- Implemented by recording `time.time()` before and after `rag.query()`
+  in `main.py` and storing it in the chat history dict
+- Displayed inline in `render_chat()` in `app/ui.py` using a styled span
+- This makes the app feel production-grade and gives real data for the
+  evaluation/experiments section of the presentation
+
+**Feature 3 — FAISS Index Persistence (save/load)**
+- Problem before: every time the app restarted or the page refreshed,
+  users had to re-upload and re-embed all documents. For large corpora
+  this could take 30–60 seconds.
+- Solution: automatically save the FAISS index to disk after processing
+  using `vector_store.save_local("faiss_index/")` and restore it on
+  next launch with `vector_store.load_local()`
+- Also saves a `session_meta.json` alongside the index storing:
+  doc_names and total_chunks so the sidebar stats restore correctly
+- Added `render_load_previous()` in `ui.py` — shows a "⚡ Load Previous
+  Session" button in the sidebar whenever a saved index is detected
+- Added `RAGPipeline.index_exists()` static method for clean existence check
+- Updated `main.py` to auto-save after every successful processing run
+  and handle load-previous button click with full session state restore
+
+### Test results
+- Indexed STATEMENT_OF_PURPOSE.pdf → 6 chunks → index saved to disk
+- Stopped app, restarted → "Load Previous Session" button appeared
+- Clicked load → index restored instantly, no re-upload needed
+- Asked "What is this document about?" → correct answer in 2.94s
+- Response time displayed correctly in chat bubble
+
+### Files changed
+- `app/rag_pipeline.py` — updated save_index(), load_index(), added index_exists()
+- `app/ui.py` — fixed chunk size label, added time display, added render_load_previous()
+- `main.py` — complete rewrite with auto-save, load-previous flow, session meta
+
+### GitHub commit
+`feat: index persistence, response time display, fix characters vs tokens wording`
+
+---
+
+## Next Steps (Session 5 — Priority 2)
+- [ ] Document summarization button per uploaded PDF
+- [ ] Source highlighting — bold the key snippet in citation cards
+- [ ] Chat export — download conversation as .txt file
+- [ ] Guardrail visibility — distinct UI card when answer not found in docs
+
+---
+
+## Session 4 — Priority 1 Improvements (Apr 23, 2026)
+
+### What was done
+
+**Fix 1 — Terminology correction (characters vs tokens)**
+- The sidebar label said "Chunk size (tokens)" but the code uses
+  `RecursiveCharacterTextSplitter` which splits on character count, not tokens.
+- Fixed label to "Chunk size (characters)" in `app/ui.py`.
+- Also updated the help tooltip to explain the trade-off clearly.
+- This matters because an interviewer or professor would catch this mismatch
+  immediately if the code and UI don't agree.
+
+**Fix 2 — Response time display**
+- Added elapsed time display to every MetaAssist chat bubble.
+- Format: "METAASSIST · ⏱ 2.94s"
+- Implementation: `time.time()` before and after `rag.query()` in `main.py`,
+  stored in session state with each chat turn, rendered in `render_chat()`
+  in `ui.py`.
+- Observed response times: 2–4 seconds on Groq free tier with 512-char chunks.
+
+**Fix 3 — FAISS Index Persistence (major feature)**
+- Problem: every page refresh required re-uploading and re-embedding documents.
+  For large documents this takes 10–30 seconds and wastes API calls.
+- Solution: auto-save the FAISS index to disk after every successful ingestion.
+
+- How it works:
+  1. After `load_documents()` succeeds, `rag.save_index("faiss_index/")` is
+     called automatically in `main.py`.
+  2. A companion `session_meta.json` file is saved alongside the index,
+     storing doc names and chunk count so the UI can restore sidebar stats.
+  3. On next launch, `render_load_previous()` in `ui.py` detects the saved
+     index and shows a "⚡ Load Previous Session" button in the sidebar.
+  4. Clicking it calls `rag.load_index()` which deserializes the FAISS index
+     from disk and rebuilds the retriever — no re-embedding required.
+
+- Files saved to faiss_index/ folder:
+    - index.faiss   → the actual FAISS vector index
+    - index.pkl     → chunk metadata (source, page numbers)
+    - meta.json     → pipeline config (chunk_size, top_k, total_chunks)
+    - session_meta.json → doc names for UI display
+
+- The faiss_index/ folder is listed in .gitignore so it is never committed.
+
+- Test result: uploaded STATEMENT_OF_PURPOSE.pdf, indexed 6 chunks, stopped
+  the app, restarted, clicked "Load Previous Session" — app answered correctly
+  without any re-upload. ✅
+
+### Files changed
+- `app/rag_pipeline.py` — updated save_index(), load_index(), added index_exists()
+- `app/ui.py` — fixed label, added time display in render_chat(), added render_load_previous()
+- `main.py` — full rewrite with auto-save after processing, load previous session flow
+
+### GitHub commit
+`feat: index persistence with save/load, response time display, fix characters vs tokens label`
+
+### Performance observation
+- First run (with embedding): ~15–20 seconds for a 6-chunk document
+- Subsequent runs (load from disk): ~1–2 seconds
+- This is a 10x speedup and a strong talking point for the presentation
+
+---
+
+## Next Steps (Session 5 — Priority 2)
+- [ ] Document summarization button ("📋 Summarize this PDF")
+- [ ] Source highlighting — bold the key phrase in citation snippets
+- [ ] Chat export — download full conversation as .txt file
+- [ ] Guardrail visibility — distinct UI card for "not found in documents"
