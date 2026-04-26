@@ -297,3 +297,84 @@ google-generativeai 0.8.6, python-dotenv 1.2.2
 - [ ] Source highlighting — bold the key phrase in citation snippets
 - [ ] Chat export — download full conversation as .txt file
 - [ ] Guardrail visibility — distinct UI card for "not found in documents"
+
+---
+
+## Session 5 — Priority 2 Features (Apr 26, 2026)
+
+### What was done
+
+**Feature 1 — Guardrail Visibility**
+- Problem: when MetaAssist couldn't find an answer in the documents, it
+  returned plain text that looked identical to a normal answer. Users had
+  no visual cue that the response was a "not found" case.
+- Solution: added guardrail detection in render_chat() in ui.py. If the
+  answer contains "not available in the uploaded documents", the bubble
+  renders as a distinct amber/yellow card with a ⚠️ warning icon instead
+  of the standard green bot bubble.
+- Detection logic: simple substring check on the answer text, which aligns
+  with the exact phrase in the system prompt's guardrail instruction.
+- Tested: asked "do you know liverpool fc?" — correctly triggered yellow
+  guardrail card in 0.67s.
+
+**Feature 2 — Source Highlighting**
+- Redesigned the source citation cards inside the collapsible expander.
+- Before: plain text with bold filename and italic snippet.
+- After: teal numbered badge (#1, #2...), filename and page number on one
+  line, snippet displayed in a light grey code-style box with a
+  "Retrieved passage:" label in teal.
+- The new design makes it immediately clear which part of which document
+  was used to generate each answer — important for enterprise trust and
+  transparency.
+
+**Feature 3 — Chat Export**
+- Added render_export_button() function to ui.py.
+- Shows a "💾 Export Chat (.txt)" button next to the Summarize button.
+- Only renders when chat_history is non-empty.
+- Export format: numbered conversation turns with word-wrapped answers
+  (70 chars), response time, and source citations listed per turn.
+- Uses Streamlit's st.download_button — triggers a browser file download
+  with filename metaassist_conversation.txt.
+- Tested: downloaded file correctly contained 2 turns with sources.
+
+**Feature 4 — Document Summarization**
+- Added summarize() method to RAGPipeline class in rag_pipeline.py.
+- Uses a higher top_k (min 8 or total chunks) with a broad query
+  "main topics key points summary overview" to retrieve representative
+  chunks from across the document.
+- A custom summarization prompt instructs the LLM to return a structured
+  response with three sections: Overview, Key Points, Important Details.
+- Wired into main.py with a "📋 Summarize Documents" button.
+- Summary is stored in session state so it persists across rerenders
+  without re-calling the API. A "✕ Clear Summary" button resets it.
+- Tested on STATEMENT_OF_PURPOSE.pdf — correctly extracted: CGPA 8.55,
+  LICET institution, BITS Pilani target program, Meetscribe and Smart AC
+  projects, and MetaAssist itself as a listed project.
+
+### Files changed
+- `app/ui.py` — guardrail bubble, source card redesign, render_export_button()
+- `app/rag_pipeline.py` — added summarize() method
+- `main.py` — summarize button, export button, summary session state
+
+### GitHub commit
+`feat: guardrail visibility, source highlighting, chat export, document summarization`
+
+### Current feature set (complete)
+- PDF upload and multi-document support
+- RAG pipeline: chunking → embedding → FAISS → LLM generation
+- Semantic Q&A with source citations
+- Conversation memory (last 5 turns)
+- FAISS index persistence (save/load from disk)
+- Response time display
+- Document summarization
+- Chat export as .txt
+- Guardrail visibility for out-of-scope questions
+- Correct terminology throughout (characters not tokens)
+
+---
+
+## Next Steps (Session 6 — Evaluation & Polish)
+- [ ] Build evaluation tab — chunk size comparison table and top-K bar chart
+- [ ] Update PPT with Session 4 and 5 additions
+- [ ] Update technical documentation Word file
+- [ ] Final README polish for GitHub
